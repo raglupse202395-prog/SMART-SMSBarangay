@@ -9,7 +9,7 @@ import CreateHouseholdModal from './CreateHouseholdModal_v2';
 import EditHouseholdModal from './EditHouseholdModal';
 import DeleteHouseholdModal from './DeleteHouseholdModal';
 import service from '../../services/service';
-import '../../styles/resident.css';
+import '../../styles/Resident.css';
 
 const Households = () => {
   const [households, setHouseholds] = useState([]);
