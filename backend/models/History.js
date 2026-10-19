@@ -1,0 +1,28 @@
+const mongoose = require('mongoose');
+
+const historySchema = new mongoose.Schema({
+    broadcastType: { type: String, required: false, default: null },
+    phoneNumbers: {
+        type: [String],
+        required: true,
+        validate: {
+            validator: (arr) => arr.length > 0,
+            message: 'At least one phone number is required',
+        },
+    },
+    message: { type: String, required: true, trim: true },
+    messageId: { type: String, required: false, default: null },
+    createdBy: { type: String, required: true },
+    status: { type: String, enum: ['Pending', 'Sent', 'Delivered', 'Failed', 'Unknown'], default: 'Pending' },
+    error: { type: String, required: false, default: null },
+    createdAt: {
+        type: Date,
+        default: () => {
+            const now = new Date();
+            const offset = 8 * 60;
+            return new Date(now.getTime() + offset * 60 * 1000);
+        },
+    },
+});
+
+module.exports = mongoose.model('History', historySchema);
