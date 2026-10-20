@@ -278,10 +278,48 @@ Clarin, Misamis Occidental
     });
 }
 
+// --- UPDATED: Document Request Route (Auto-saves to Residents) ---
 routes.post('/api/resident/documentRequest', async (req, res) => {
     try {
-        const { email, phoneNumber, address, fullName, purpose, documentType } = req.body;
+        const { email, phoneNumber, address, fullName, purpose, documentType, birthdate, gender } = req.body;
 
+        // 1. Check if the resident already exists in the database
+        let existingResident = await Resident.findOne({ 
+            $or: [
+                { 'contact.email': email },
+                { 'contact.phone': phoneNumber }
+            ]
+        });
+
+        // 2. If they don't exist, create a new Resident profile automatically
+        if (!existingResident) {
+            // Split the full name into first and last name (basic split)
+            const nameParts = fullName.trim().split(' ');
+            const firstName = nameParts[0] || 'Unknown';
+            const lastName = nameParts.length > 1 ? nameParts[nameParts.length - 1] : 'Unknown';
+
+            const newResident = new Resident({
+                first_name: firstName,
+                last_name: lastName,
+                birthdate: birthdate || new Date('1990-01-01'), // Fallback if not provided
+                age: birthdate ? new Date().getFullYear() - new Date(birthdate).getFullYear() : 30,
+                gender: gender || 'Other',
+                marital_status: 'Single',
+                contact: { email, phone: phoneNumber },
+                address: { 
+                    house_number: 'N/A', 
+                    street: address, 
+                    barangay: 'POBLACION 1', 
+                    city: 'CLARIN', 
+                    province: 'MISAMIS OCCIDENTAL' 
+                },
+                registration: { resident_type: 'Temporary' } // Mark as temporary since they registered online
+            });
+            await newResident.save();
+            console.log(`✅ New resident auto-created from request: ${fullName}`);
+        }
+
+        // 3. Save the document request
         const newRequest = new Request({
             email, phoneNumber, address, fullName, purpose, documentType,
             status: 'pending'
@@ -314,7 +352,6 @@ routes.get('/api/admin/pendingrequest', authMiddleware, async (req, res) => {
     }
 });
 
-// --- FIXED: Removed requireAnyRole so Master Admin can approve ---
 routes.put('/api/admin/updaterequests/:id', authMiddleware, async (req, res) => {
     try {
         const { id } = req.params;
@@ -324,7 +361,6 @@ routes.put('/api/admin/updaterequests/:id', authMiddleware, async (req, res) => 
             return res.status(400).json({ success: false, message: 'Invalid status value' });
         }
 
-        // 1. Update the database FIRST
         const updatedRequest = await Request.findByIdAndUpdate(
             id,
             { status, ...(approvalDetails && { approvalDetails }), ...(rejectionReason && { rejectionReason }) },
@@ -347,10 +383,8 @@ routes.put('/api/admin/updaterequests/:id', authMiddleware, async (req, res) => 
             });
         }
 
-        // 2. Try to send Notifications (Email & SMS)
         try {
             if (status === 'approved' && approvalDetails) {
-                // Send Email
                 try {
                     await sendApprovalEmail(updatedRequest.email, updatedRequest.fullName, updatedRequest.documentType, approvalDetails);
                     console.log("✅ Approval Email sent to", updatedRequest.email);
@@ -358,7 +392,6 @@ routes.put('/api/admin/updaterequests/:id', authMiddleware, async (req, res) => 
                     console.error("⚠️ Email failed to send:", emailErr.message);
                 }
                 
-                // Send SMS
                 try {
                     const smsMessage = `[POB 1] Hi ${updatedRequest.fullName.split(' ')[0]}, your ${updatedRequest.documentType} is APPROVED. Pickup on ${new Date(approvalDetails.pickupDate).toLocaleDateString('en-PH')} at ${approvalDetails.pickupTime}. Please bring valid ID.`;
                     
@@ -395,7 +428,6 @@ routes.put('/api/admin/updaterequests/:id', authMiddleware, async (req, res) => 
             console.error('❌ Notification Error:', notificationError.message);
         }
 
-        // 3. Return success to the frontend
         return res.status(200).json({ success: true, data: updatedRequest });
     } catch (error) {
         console.error("❌ APPROVAL DATABASE ERROR:", error);
