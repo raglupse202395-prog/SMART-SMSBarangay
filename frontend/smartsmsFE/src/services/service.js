@@ -1,6 +1,8 @@
 import axios from 'axios'
 
-const baseUrl = '/api'
+// This tells Vite to use the Render Environment Variable in production, 
+// but fallback to '/api' when testing on localhost.
+const baseUrl = import.meta.env.VITE_API_URL || '/api';
 
 // Automatically attach the login token to every request
 axios.interceptors.request.use((config) => {
@@ -40,7 +42,6 @@ export const submitDocumentRequest = async (data) => (await axios.post(`${baseUr
 export const getAllDocumentRequests = async () => (await axios.get(`${baseUrl}/admin/allrequest`)).data
 export const getPendingDocumentRequests = async () => (await axios.get(`${baseUrl}/admin/pendingrequest`)).data
 
-// UPDATED ERROR HANDLING HERE
 export const updateDocumentRequestStatus = async (id, status, additionalData = {}) => {
   try {
     const response = await axios.put(`${baseUrl}/admin/updaterequests/${id}`, { status, ...additionalData });
