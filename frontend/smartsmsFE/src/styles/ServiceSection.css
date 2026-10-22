@@ -3,13 +3,15 @@
 .services-header h2 { font-size: 2.5rem; margin-bottom: 10px; color: #fff; }
 .services-header p { font-size: 1.2rem; margin-bottom: 15px; color: #e0e0e0; }
 .services-subtitle { font-size: 0.95rem; color: #b0b0b0; display: block; }
-.services-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; max-width: 1200px; margin: 0 auto; padding: 0 20px; }
+
+/* Changed to 4 columns to fit the new card */
+.services-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px; max-width: 1200px; margin: 0 auto; padding: 0 20px; }
 .service-card { border-radius: 8px; overflow: hidden; height: 280px; position: relative; transition: all 0.3s ease; cursor: pointer; }
 .service-card:hover { transform: translateY(-5px); box-shadow: 0 10px 20px rgba(0, 0, 0, 0.3); }
 .service-content { display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center; height: 100%; padding: 20px; position: relative; z-index: 2; }
 .service-icon { font-size: 2.5rem; margin-bottom: 15px; color: #fff; transition: color 0.3s ease; }
-.service-title { font-size: 1.5rem; margin-bottom: 10px; color: #fff; transition: color 0.3s ease; }
-.service-description { font-size: 1rem; color: #e0e0e0; margin-bottom: 15px; opacity: 0; transform: translateY(20px); transition: all 0.3s ease; }
+.service-title { font-size: 1.3rem; margin-bottom: 10px; color: #fff; transition: color 0.3s ease; }
+.service-description { font-size: 0.9rem; color: #e0e0e0; margin-bottom: 15px; opacity: 0; transform: translateY(20px); transition: all 0.3s ease; }
 .service-card:hover .service-description { opacity: 1; transform: translateY(0); }
 .request-button { background-color: transparent; color: #fff; border: 2px solid #fff; padding: 10px 20px; border-radius: 4px; font-size: 1rem; cursor: pointer; transition: all 0.3s ease; opacity: 0; transform: translateY(20px); display: flex; align-items: center; gap: 8px; }
 .service-card:hover .request-button { opacity: 1; transform: translateY(0); }

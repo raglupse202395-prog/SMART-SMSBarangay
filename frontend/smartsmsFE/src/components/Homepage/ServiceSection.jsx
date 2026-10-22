@@ -20,10 +20,10 @@ const ServicesSection = () => {
     const services = [
         {
             id: 1,
-            title: "Certificate of Oneness",
-            icon: "fas fa-file-alt",
-            description: "Proof of good standing within the barangay; required for employment, business, and other legal purposes.",
-            bgImage: "cert1.jpg"
+            title: "Barangay Clearance",
+            icon: "fas fa-id-card",
+            description: "An official document certifying that the individual has no derogatory record in the barangay.",
+            bgImage: "cert1.jpg" // You can change this if you have a clearance image
         },
         {
             id: 2,
@@ -33,14 +33,14 @@ const ServicesSection = () => {
             bgImage: "cert2.jpg"
         },
         {
-            id: 4,
+            id: 3,
             title: "Certificate of Indigency",
             icon: "fas fa-hand-holding-heart",
             description: "Document issued to low-income individuals for access to social welfare and financial aid programs.",
             bgImage: "cert3.jpg"
         },
         {
-            id: 5,
+            id: 4,
             title: "Certificate of Low Income",
             icon: "fas fa-medkit",
             description: "Endorsement and support for Low Income households.",
@@ -52,7 +52,7 @@ const ServicesSection = () => {
         <div className="services-section">
             <div className="services-header">
                 <h2>Online Services</h2>
-                <p>Barangay Certification: Medical Assistance | 4P's Validation | Indigency | More</p>
+                <p>Barangay Certification: Medical Assistance | 4P's Validation | Indigency | Clearance | More</p>
                 <span className="services-subtitle">
                     Effortless Access, One Click Away: Barangay Poblacion 1 Launches Online Services for Seamless Barangay Certification
                 </span>
