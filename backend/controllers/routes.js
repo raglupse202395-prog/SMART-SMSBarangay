@@ -219,7 +219,6 @@ routes.delete('/api/history/delete/:id', authMiddleware, async (req, res) => {
     }
 });
 
-// --- Email helpers ---
 async function sendApprovalEmail(email, fullName, documentType, approvalDetails) {
     const transporter = nodemailer.createTransport({
         service: 'gmail',
@@ -319,7 +318,7 @@ routes.post('/api/resident/documentRequest', async (req, res) => {
                 registration: { resident_type: 'Temporary' }
             });
             await newResident.save();
-            console.log(`✅ New resident auto-created from request: ${fullName}`);
+            console.log(`✅ New resident auto-created: ${fullName}`);
         }
 
         const newRequest = new Request({
