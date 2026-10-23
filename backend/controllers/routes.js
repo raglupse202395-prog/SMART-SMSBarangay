@@ -56,10 +56,14 @@ const requireAnyRole = (roles) => (req, res, next) => {
 
 routes.post('/api/admin/login', async (req, res) => {
     try {
+        console.log("🔥 LOGIN ATTEMPT:", req.body); // Added for debugging
         const { username, password } = req.body
         const currentUser = await Admin.findOne({ username })
 
-        if (!currentUser) return res.status(400).json({ error: "USER NOT FOUND" })
+        if (!currentUser) {
+            console.log("❌ USER NOT FOUND IN DB:", username);
+            return res.status(400).json({ error: "USER NOT FOUND" })
+        }
 
         // --- TEMPORARY BYPASS FOR TESTING ---
         const isMatch = true; 
@@ -74,8 +78,10 @@ routes.post('/api/admin/login', async (req, res) => {
             username: currentUser.username
         }, process.env.SECRET_KEY, { expiresIn: "8h" });
 
+        console.log("✅ LOGIN SUCCESSFUL FOR:", username);
         res.json({ token, role: currentUser.role, username: currentUser.username, fullname: currentUser.fullname })
     } catch (err) {
+        console.error("❌ LOGIN ERROR:", err);
         res.status(400).json({ error: err.message })
     }
 })
@@ -278,12 +284,10 @@ Clarin, Misamis Occidental
     });
 }
 
-// --- UPDATED: Document Request Route (Auto-saves to Residents) ---
 routes.post('/api/resident/documentRequest', async (req, res) => {
     try {
         const { email, phoneNumber, address, fullName, purpose, documentType, birthdate, gender } = req.body;
 
-        // 1. Check if the resident already exists in the database
         let existingResident = await Resident.findOne({ 
             $or: [
                 { 'contact.email': email },
@@ -291,9 +295,7 @@ routes.post('/api/resident/documentRequest', async (req, res) => {
             ]
         });
 
-        // 2. If they don't exist, create a new Resident profile automatically
         if (!existingResident) {
-            // Split the full name into first and last name (basic split)
             const nameParts = fullName.trim().split(' ');
             const firstName = nameParts[0] || 'Unknown';
             const lastName = nameParts.length > 1 ? nameParts[nameParts.length - 1] : 'Unknown';
@@ -301,7 +303,7 @@ routes.post('/api/resident/documentRequest', async (req, res) => {
             const newResident = new Resident({
                 first_name: firstName,
                 last_name: lastName,
-                birthdate: birthdate || new Date('1990-01-01'), // Fallback if not provided
+                birthdate: birthdate || new Date('1990-01-01'),
                 age: birthdate ? new Date().getFullYear() - new Date(birthdate).getFullYear() : 30,
                 gender: gender || 'Other',
                 marital_status: 'Single',
@@ -313,13 +315,12 @@ routes.post('/api/resident/documentRequest', async (req, res) => {
                     city: 'CLARIN', 
                     province: 'MISAMIS OCCIDENTAL' 
                 },
-                registration: { resident_type: 'Temporary' } // Mark as temporary since they registered online
+                registration: { resident_type: 'Temporary' }
             });
             await newResident.save();
             console.log(`✅ New resident auto-created from request: ${fullName}`);
         }
 
-        // 3. Save the document request
         const newRequest = new Request({
             email, phoneNumber, address, fullName, purpose, documentType,
             status: 'pending'
@@ -357,15 +358,26 @@ routes.put('/api/admin/updaterequests/:id', authMiddleware, async (req, res) => 
         const { id } = req.params;
         const { status, approvalDetails, rejectionReason } = req.body;
 
-        if (!['pending', 'approved', 'rejected'].includes(status)) {
+        if (!['pending', 'purok_approved', 'approved', 'rejected'].includes(status)) {
             return res.status(400).json({ success: false, message: 'Invalid status value' });
         }
 
-        const updatedRequest = await Request.findByIdAndUpdate(
-            id,
-            { status, ...(approvalDetails && { approvalDetails }), ...(rejectionReason && { rejectionReason }) },
-            { new: true }
-        );
+        const updateData = { status };
+        
+        if (status === 'purok_approved') {
+            updateData.purokApprovedBy = req.user.fullname || req.user.username;
+            updateData.purokApprovedAt = new Date();
+        }
+
+        if (status === 'approved' && approvalDetails) {
+            updateData.approvalDetails = approvalDetails;
+        }
+
+        if (status === 'rejected' && rejectionReason) {
+            updateData.rejectionReason = rejectionReason;
+        }
+
+        const updatedRequest = await Request.findByIdAndUpdate(id, updateData, { new: true });
 
         if (!updatedRequest) return res.status(404).json({ success: false, message: 'Not found' });
 
@@ -376,56 +388,52 @@ routes.put('/api/admin/updaterequests/:id', authMiddleware, async (req, res) => 
                 action: `${status} document request`,
                 target: id,
                 details: {
-                    requestId: id, status,
+                    requestId: id, 
+                    status,
                     fullName: updatedRequest.fullName,
                     documentType: updatedRequest.documentType
                 }
             });
         }
 
-        try {
-            if (status === 'approved' && approvalDetails) {
-                try {
-                    await sendApprovalEmail(updatedRequest.email, updatedRequest.fullName, updatedRequest.documentType, approvalDetails);
-                    console.log("✅ Approval Email sent to", updatedRequest.email);
-                } catch (emailErr) {
-                    console.error("⚠️ Email failed to send:", emailErr.message);
-                }
-                
-                try {
-                    const smsMessage = `[POB 1] Hi ${updatedRequest.fullName.split(' ')[0]}, your ${updatedRequest.documentType} is APPROVED. Pickup on ${new Date(approvalDetails.pickupDate).toLocaleDateString('en-PH')} at ${approvalDetails.pickupTime}. Please bring valid ID.`;
-                    
-                    const httpFetchClient = {
-                        get: async (url, headers) => (await fetch(url, { method: "GET", headers })).json(),
-                        post: async (url, body, headers) => (await fetch(url, { method: "POST", headers, body: JSON.stringify(body) })).json(),
-                        delete: async (url, headers) => (await fetch(url, { method: "DELETE", headers })).json()
-                    };
-                    
-                    const smsClient = new Client(process.env.SMS_GATEWAY_LOGIN, process.env.SMS_GATEWAY_PASSWORD, httpFetchClient);
-                    
-                    let phone = updatedRequest.phoneNumber;
-                    if (phone.startsWith('09')) phone = '+63' + phone.substring(1);
-
-                    await smsClient.send({
-                        message: smsMessage,
-                        phoneNumbers: [phone],
-                        simNumber: parseInt(process.env.SIM_NUMBER) || 1
-                    });
-                    console.log("✅ Approval SMS sent to", phone);
-                } catch (smsErr) {
-                    console.error("⚠️ SMS failed to send:", smsErr.message);
-                }
-
-            } else if (status === 'rejected' && rejectionReason) {
-                try {
-                    await sendRejectionEmail(updatedRequest.email, updatedRequest.fullName, updatedRequest.documentType, rejectionReason);
-                    console.log("✅ Rejection Email sent to", updatedRequest.email);
-                } catch (emailErr) {
-                    console.error("⚠️ Rejection Email failed to send:", emailErr.message);
-                }
+        if (status === 'approved' && approvalDetails) {
+            try {
+                await sendApprovalEmail(updatedRequest.email, updatedRequest.fullName, updatedRequest.documentType, approvalDetails);
+                console.log("✅ Approval Email sent to", updatedRequest.email);
+            } catch (emailErr) {
+                console.error("⚠️ Email failed:", emailErr.message);
             }
-        } catch (notificationError) {
-            console.error('❌ Notification Error:', notificationError.message);
+            
+            try {
+                const smsMessage = `[POB 1] Hi ${updatedRequest.fullName.split(' ')[0]}, your ${updatedRequest.documentType} is APPROVED. Pickup on ${new Date(approvalDetails.pickupDate).toLocaleDateString('en-PH')} at ${approvalDetails.pickupTime}. Please bring valid ID.`;
+                
+                const httpFetchClient = {
+                    get: async (url, headers) => (await fetch(url, { method: "GET", headers })).json(),
+                    post: async (url, body, headers) => (await fetch(url, { method: "POST", headers, body: JSON.stringify(body) })).json(),
+                    delete: async (url, headers) => (await fetch(url, { method: "DELETE", headers })).json()
+                };
+                
+                const smsClient = new Client(process.env.SMS_GATEWAY_LOGIN, process.env.SMS_GATEWAY_PASSWORD, httpFetchClient);
+                
+                let phone = updatedRequest.phoneNumber;
+                if (phone.startsWith('09')) phone = '+63' + phone.substring(1);
+
+                await smsClient.send({
+                    message: smsMessage,
+                    phoneNumbers: [phone],
+                    simNumber: parseInt(process.env.SIM_NUMBER) || 1
+                });
+                console.log("✅ Approval SMS sent to", phone);
+            } catch (smsErr) {
+                console.error("⚠️ SMS failed:", smsErr.message);
+            }
+        } else if (status === 'rejected' && rejectionReason) {
+            try {
+                await sendRejectionEmail(updatedRequest.email, updatedRequest.fullName, updatedRequest.documentType, rejectionReason);
+                console.log("✅ Rejection Email sent to", updatedRequest.email);
+            } catch (emailErr) {
+                console.error("⚠️ Rejection Email failed:", emailErr.message);
+            }
         }
 
         return res.status(200).json({ success: true, data: updatedRequest });
