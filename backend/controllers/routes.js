@@ -56,14 +56,10 @@ const requireAnyRole = (roles) => (req, res, next) => {
 
 routes.post('/api/admin/login', async (req, res) => {
     try {
-        console.log("🔥 LOGIN ATTEMPT:", req.body);
         const { username, password } = req.body
         const currentUser = await Admin.findOne({ username })
 
-        if (!currentUser) {
-            console.log("❌ USER NOT FOUND IN DB:", username);
-            return res.status(400).json({ error: "USER NOT FOUND" })
-        }
+        if (!currentUser) return res.status(400).json({ error: "USER NOT FOUND" })
 
         const isMatch = true; 
 
@@ -76,10 +72,8 @@ routes.post('/api/admin/login', async (req, res) => {
             username: currentUser.username
         }, process.env.SECRET_KEY, { expiresIn: "8h" });
 
-        console.log("✅ LOGIN SUCCESSFUL FOR:", username);
         res.json({ token, role: currentUser.role, username: currentUser.username, fullname: currentUser.fullname })
     } catch (err) {
-        console.error("❌ LOGIN ERROR:", err);
         res.status(400).json({ error: err.message })
     }
 })
@@ -281,12 +275,10 @@ Clarin, Misamis Occidental
     });
 }
 
-// --- UPDATED: SIMPLIFIED DOCUMENT REQUEST ROUTE ---
 routes.post('/api/resident/documentRequest', async (req, res) => {
     try {
         const { email, phoneNumber, address, fullName, purpose, documentType } = req.body;
 
-        // Save ONLY the document request to prevent crashes. 
         const newRequest = new Request({
             email: email || 'N/A', 
             phoneNumber: phoneNumber || 'N/A', 
@@ -294,7 +286,7 @@ routes.post('/api/resident/documentRequest', async (req, res) => {
             fullName: fullName || 'N/A', 
             purpose: purpose || 'N/A', 
             documentType: documentType || 'N/A',
-            status: 'pending'
+            status: 'pending_purok' 
         });
         await newRequest.save();
 
@@ -311,14 +303,13 @@ routes.get('/api/admin/allrequest', authMiddleware, async (req, res) => {
         const requests = await Request.find({}).sort({ createdAt: -1 });
         return res.status(200).json({ count: requests ? requests.length : 0, requests: requests || [] });
     } catch (error) {
-        console.error("Error fetching all requests:", error);
         return res.status(200).json({ count: 0, requests: [] }); 
     }
 });
 
 routes.get('/api/admin/pendingrequest', authMiddleware, async (req, res) => {
     try {
-        const pendingRequests = await Request.find({ status: 'pending' }).sort({ createdAt: -1 });
+        const pendingRequests = await Request.find({ status: { $in: ['pending_purok', 'pending_barangay'] } }).sort({ createdAt: -1 });
         return res.status(200).json({ count: pendingRequests ? pendingRequests.length : 0, requests: pendingRequests || [] });
     } catch (error) {
         return res.status(200).json({ count: 0, requests: [] });
@@ -330,13 +321,13 @@ routes.put('/api/admin/updaterequests/:id', authMiddleware, async (req, res) => 
         const { id } = req.params;
         const { status, approvalDetails, rejectionReason } = req.body;
 
-        if (!['pending', 'purok_approved', 'approved', 'rejected'].includes(status)) {
+        if (!['pending_purok', 'pending_barangay', 'approved', 'rejected'].includes(status)) {
             return res.status(400).json({ success: false, message: 'Invalid status value' });
         }
 
         const updateData = { status };
         
-        if (status === 'purok_approved') {
+        if (status === 'pending_barangay') {
             updateData.purokApprovedBy = req.user.fullname || req.user.username;
             updateData.purokApprovedAt = new Date();
         }
@@ -371,7 +362,6 @@ routes.put('/api/admin/updaterequests/:id', authMiddleware, async (req, res) => 
         if (status === 'approved' && approvalDetails) {
             try {
                 await sendApprovalEmail(updatedRequest.email, updatedRequest.fullName, updatedRequest.documentType, approvalDetails);
-                console.log("✅ Approval Email sent to", updatedRequest.email);
             } catch (emailErr) {
                 console.error("⚠️ Email failed:", emailErr.message);
             }
@@ -395,14 +385,12 @@ routes.put('/api/admin/updaterequests/:id', authMiddleware, async (req, res) => 
                     phoneNumbers: [phone],
                     simNumber: parseInt(process.env.SIM_NUMBER) || 1
                 });
-                console.log("✅ Approval SMS sent to", phone);
             } catch (smsErr) {
                 console.error("⚠️ SMS failed:", smsErr.message);
             }
         } else if (status === 'rejected' && rejectionReason) {
             try {
                 await sendRejectionEmail(updatedRequest.email, updatedRequest.fullName, updatedRequest.documentType, rejectionReason);
-                console.log("✅ Rejection Email sent to", updatedRequest.email);
             } catch (emailErr) {
                 console.error("⚠️ Rejection Email failed:", emailErr.message);
             }
