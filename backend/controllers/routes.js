@@ -281,48 +281,19 @@ Clarin, Misamis Occidental
     });
 }
 
+// --- UPDATED: SIMPLIFIED DOCUMENT REQUEST ROUTE ---
 routes.post('/api/resident/documentRequest', async (req, res) => {
     try {
-        const { email, phoneNumber, address, fullName, purpose, documentType, birthdate, gender } = req.body;
+        const { email, phoneNumber, address, fullName, purpose, documentType } = req.body;
 
-        let existingResident = await Resident.findOne({ 
-            $or: [
-                { 'contact.email': email },
-                { 'contact.phone': phoneNumber }
-            ]
-        });
-
-        if (!existingResident) {
-            const nameParts = fullName.trim().split(' ');
-            const firstName = nameParts[0] || 'Unknown';
-            const lastName = nameParts.length > 1 ? nameParts[nameParts.length - 1] : 'Unknown';
-
-            const newResident = new Resident({
-                first_name: firstName,
-                last_name: lastName,
-                birthdate: birthdate ? new Date(birthdate) : new Date('1990-01-01'),
-                age: birthdate ? (new Date().getFullYear() - new Date(birthdate).getFullYear()) : 30,
-                gender: gender || 'Other',
-                marital_status: 'Single',
-                contact: { 
-                    email: email || 'noemail@example.com', 
-                    phone: phoneNumber || '00000000000' 
-                },
-                address: { 
-                    house_number: 'N/A', 
-                    street: address || 'N/A', 
-                    barangay: 'POBLACION 1', 
-                    city: 'CLARIN', 
-                    province: 'MISAMIS OCCIDENTAL' 
-                },
-                registration: { resident_type: 'Temporary' }
-            });
-            await newResident.save();
-            console.log(`✅ New resident auto-created: ${fullName}`);
-        }
-
+        // Save ONLY the document request to prevent crashes. 
         const newRequest = new Request({
-            email, phoneNumber, address, fullName, purpose, documentType,
+            email: email || 'N/A', 
+            phoneNumber: phoneNumber || 'N/A', 
+            address: address || 'N/A', 
+            fullName: fullName || 'N/A', 
+            purpose: purpose || 'N/A', 
+            documentType: documentType || 'N/A',
             status: 'pending'
         });
         await newRequest.save();
