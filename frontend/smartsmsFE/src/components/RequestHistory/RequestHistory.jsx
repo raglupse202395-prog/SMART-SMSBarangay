@@ -14,16 +14,28 @@ export default function RequestHistory() {
     const fetchRequests = async () => {
         try {
             setLoading(true);
-            const response = await apiService.getAllDocumentRequests();
-            const requestData = response?.requests || response || [];
-            const filteredData = Array.isArray(requestData)
-                ? requestData.filter(request => request.status === 'approved' || request.status === 'rejected')
-                : [];
-            setRequests(filteredData);
             setError(null);
+            const response = await apiService.getAllDocumentRequests();
+            
+            // SAFE CHECK: Make sure we are getting an array
+            let requestData = [];
+            if (Array.isArray(response)) {
+                requestData = response;
+            } else if (response && Array.isArray(response.requests)) {
+                requestData = response.requests;
+            }
+
+            // Filter for approved or rejected only
+            const filteredData = requestData.filter(request => 
+                request.status === 'approved' || 
+                request.status === 'rejected' || 
+                request.status === 'purok_approved'
+            );
+            
+            setRequests(filteredData);
         } catch (err) {
-            setError('Error fetching document requests');
             console.error('Error fetching requests:', err);
+            setError('Error fetching document requests. The server might be waking up.');
             setRequests([]);
         } finally {
             setLoading(false);
@@ -32,17 +44,17 @@ export default function RequestHistory() {
 
     const handleView = (request) => {
         const details = [
-            `Name: ${request.fullName}`,
-            `Email: ${request.email}`,
-            `Phone: ${request.phoneNumber}`,
-            `Address: ${request.address}`,
-            `Document Type: ${request.documentType}`,
-            `Purpose: ${request.purpose}`,
-            `Status: ${request.status}`,
-            `Date: ${new Date(new Date(request.createdAt).getTime() - 8 * 60 * 60 * 1000).toLocaleString('en-PH', {
+            `Name: ${request.fullName || 'N/A'}`,
+            `Email: ${request.email || 'N/A'}`,
+            `Phone: ${request.phoneNumber || 'N/A'}`,
+            `Address: ${request.address || 'N/A'}`,
+            `Document Type: ${request.documentType || 'N/A'}`,
+            `Purpose: ${request.purpose || 'N/A'}`,
+            `Status: ${request.status || 'N/A'}`,
+            `Date: ${request.createdAt ? new Date(new Date(request.createdAt).getTime() - 8 * 60 * 60 * 1000).toLocaleString('en-PH', {
                 timeZone: 'Asia/Manila', year: 'numeric', month: '2-digit', day: '2-digit',
                 hour: 'numeric', minute: '2-digit', hour12: true,
-            })}`
+            }) : 'N/A'}`
         ];
 
         if (request.status === 'approved' && request.approvalDetails) {
@@ -64,6 +76,7 @@ export default function RequestHistory() {
         switch (status) {
             case 'approved': return 'status-approved';
             case 'rejected': return 'status-rejected';
+            case 'purok_approved': return 'status-pending'; // Yellow styling
             default: return 'status-default';
         }
     };
@@ -76,7 +89,10 @@ export default function RequestHistory() {
         <MainTemplate headerName={"Request History"} cardHeader={"Request History"}>
             <div className="main-container">
                 {loading ? (
-                    <div className="loading-container"><div className="loading-spinner"></div></div>
+                    <div className="loading-container">
+                        <div className="loading-spinner"></div>
+                        <p style={{marginTop: '10px', color: '#666'}}>Waking up server...</p>
+                    </div>
                 ) : error ? (
                     <div className="error-message">{error}</div>
                 ) : (
@@ -87,7 +103,8 @@ export default function RequestHistory() {
                                     <label htmlFor="statusFilter">Status:</label>
                                     <select id="statusFilter" value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)} className="filter-select">
                                         <option value="all">All</option>
-                                        <option value="approved">Approved</option>
+                                        <option value="approved">Approved (Ready)</option>
+                                        <option value="purok_approved">Purok Approved</option>
                                         <option value="rejected">Rejected</option>
                                     </select>
                                 </div>
@@ -112,22 +129,22 @@ export default function RequestHistory() {
                                     <tbody>
                                         {filteredRequests.length > 0 ? (
                                             filteredRequests.map((request) => (
-                                                <tr key={request._id || request.id || Math.random().toString()}>
+                                                <tr key={request._id || Math.random().toString()}>
                                                     <td>
                                                         <div className="requester-info">
-                                                            <div className="requester-name">{request.fullName}</div>
-                                                            <div className="requester-email">{request.email}</div>
-                                                            <div className="requester-phone">{request.phoneNumber}</div>
+                                                            <div className="requester-name">{request.fullName || 'N/A'}</div>
+                                                            <div className="requester-email">{request.email || 'N/A'}</div>
+                                                            <div className="requester-phone">{request.phoneNumber || 'N/A'}</div>
                                                         </div>
                                                     </td>
-                                                    <td>{request.documentType}</td>
-                                                    <td><div className="purpose-text">{request.purpose}</div></td>
+                                                    <td>{request.documentType || 'N/A'}</td>
+                                                    <td><div className="purpose-text">{request.purpose || 'N/A'}</div></td>
                                                     <td><span className={`status-badge ${getStatusClass(request.status)}`}>{request.status || 'unknown'}</span></td>
                                                     <td>
-                                                        {new Date(new Date(request.createdAt).getTime() - 8 * 60 * 60 * 1000).toLocaleString('en-PH', {
+                                                        {request.createdAt ? new Date(new Date(request.createdAt).getTime() - 8 * 60 * 60 * 1000).toLocaleString('en-PH', {
                                                             timeZone: 'Asia/Manila', year: 'numeric', month: '2-digit', day: '2-digit',
                                                             hour: 'numeric', minute: '2-digit', hour12: true,
-                                                        })}
+                                                        }) : 'N/A'}
                                                     </td>
                                                     <td>
                                                         <div className="action-buttons">
@@ -139,7 +156,13 @@ export default function RequestHistory() {
                                                 </tr>
                                             ))
                                         ) : (
-                                            <tr><td colSpan="6" className="no-requests-message">No document requests found</td></tr>
+                                            <tr>
+                                                <td colSpan="6">
+                                                    <div className="no-requests-message">
+                                                        No document requests found. If you just requested one, it might be pending approval.
+                                                    </div>
+                                                </td>
+                                            </tr>
                                         )}
                                     </tbody>
                                 </table>
