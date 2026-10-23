@@ -17,10 +17,12 @@ function LoginPage() {
         setIsLoading(true);
         try {
             await login(username, password);
-            navigate("/admin");
+            // Forces a full page reload to the admin route
+            window.location.href = "/admin"; 
         } catch (err) {
-            alert("LOGIN Failed");
             console.error("Login failed", err);
+            const exactError = err.response?.data?.error || err.message || "Unknown Error";
+            alert("LOGIN Failed: " + exactError);
         } finally {
             setIsLoading(false);
         }
@@ -30,7 +32,6 @@ function LoginPage() {
         <div className="login-container">
             <div className="login-card">
                 
-                {/* CLARIN LOGO HERE */}
                 <div className="login-seal-container">
                     <img src="/clarin-seal.png" alt="Municipality of Clarin Official Seal" className="login-seal" />
                 </div>

@@ -1,6 +1,7 @@
 import axios from 'axios'
 
-const baseUrl = '/api'
+// HARDCODED BACKEND URL
+const baseUrl = 'https://smartsms-backend.onrender.com/api';
 
 // Automatically attach the login token to every request
 axios.interceptors.request.use((config) => {
