@@ -4,7 +4,14 @@ import apiService from '../../services/service';
 
 const RequestModal = ({ isOpen, onClose, documentType, onSubmit }) => {
     const [formData, setFormData] = useState({
-        fullName: '', email: '', phoneNumber: '', address: '', purpose: '', documentType: documentType
+        fullName: '',
+        birthdate: '',
+        gender: '',
+        email: '',
+        phoneNumber: '',
+        address: '',
+        purpose: '',
+        documentType: documentType
     });
     
     const [isSubmitting, setIsSubmitting] = useState(false);
@@ -20,9 +27,10 @@ const RequestModal = ({ isOpen, onClose, documentType, onSubmit }) => {
         setErrorMessage('');
         
         try {
+            // This sends the data to your routes.js backend
             await apiService.submitDocumentRequest(formData);
-            onSubmit(); 
-            onClose();  
+            onSubmit(); // Show success message
+            onClose();  // Close modal
         } catch (error) {
             console.error('Error submitting form:', error);
             let errorMsg = 'Failed to submit request. Server might be waking up.';
@@ -57,6 +65,24 @@ const RequestModal = ({ isOpen, onClose, documentType, onSubmit }) => {
                             <label htmlFor="fullName">Full Name *</label>
                             <input type="text" id="fullName" name="fullName" value={formData.fullName} onChange={handleChange} required placeholder="Juan Dela Cruz" />
                         </div>
+                        
+                        {/* Added Birthdate and Gender to match backend */}
+                        <div style={{ display: 'flex', gap: '15px' }}>
+                            <div className="form-group" style={{ flex: 1 }}>
+                                <label htmlFor="birthdate">Birthdate *</label>
+                                <input type="date" id="birthdate" name="birthdate" value={formData.birthdate} onChange={handleChange} required />
+                            </div>
+                            <div className="form-group" style={{ flex: 1 }}>
+                                <label htmlFor="gender">Gender *</label>
+                                <select id="gender" name="gender" value={formData.gender} onChange={handleChange} required style={{ width: '100%', padding: '12px', border: '1px solid #dcdfe6', borderRadius: '4px', fontSize: '16px' }}>
+                                    <option value="">Select Gender</option>
+                                    <option value="Male">Male</option>
+                                    <option value="Female">Female</option>
+                                    <option value="Other">Other</option>
+                                </select>
+                            </div>
+                        </div>
+
                         <div className="form-group">
                             <label htmlFor="email">Email Address *</label>
                             <input type="email" id="email" name="email" value={formData.email} onChange={handleChange} required placeholder="example@email.com" />
