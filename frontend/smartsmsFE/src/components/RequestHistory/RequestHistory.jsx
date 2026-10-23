@@ -9,37 +9,52 @@ export default function RequestHistory() {
     const [error, setError] = useState(null);
     const [filterStatus, setFilterStatus] = useState('all');
 
-    useEffect(() => { fetchRequests(); }, []);
+    useEffect(() => { 
+        fetchRequests(); 
+    }, []);
 
     const fetchRequests = async () => {
-        try {
-            setLoading(true);
-            setError(null);
-            const response = await apiService.getAllDocumentRequests();
-            
-            // SAFE CHECK: Make sure we are getting an array
-            let requestData = [];
-            if (Array.isArray(response)) {
-                requestData = response;
-            } else if (response && Array.isArray(response.requests)) {
-                requestData = response.requests;
-            }
+        setLoading(true);
+        setError(null);
+        
+        let attempts = 0;
+        const maxAttempts = 3;
+        
+        const tryFetch = async () => {
+            try {
+                attempts++;
+                const response = await apiService.getAllDocumentRequests();
+                
+                let requestData = [];
+                if (Array.isArray(response)) {
+                    requestData = response;
+                } else if (response && Array.isArray(response.requests)) {
+                    requestData = response.requests;
+                }
 
-            // Filter for approved or rejected only
-            const filteredData = requestData.filter(request => 
-                request.status === 'approved' || 
-                request.status === 'rejected' || 
-                request.status === 'purok_approved'
-            );
-            
-            setRequests(filteredData);
-        } catch (err) {
-            console.error('Error fetching requests:', err);
-            setError('Error fetching document requests. The server might be waking up.');
-            setRequests([]);
-        } finally {
-            setLoading(false);
-        }
+                const filteredData = requestData.filter(request => 
+                    request.status === 'approved' || 
+                    request.status === 'rejected' || 
+                    request.status === 'purok_approved'
+                );
+                
+                setRequests(filteredData);
+                setLoading(false);
+            } catch (err) {
+                console.error(`Attempt ${attempts} failed:`, err);
+                
+                if (attempts < maxAttempts) {
+                    console.log("Retrying in 5 seconds...");
+                    setTimeout(tryFetch, 5000); 
+                } else {
+                    setError('Error fetching document requests. The server might be waking up. Please refresh the page.');
+                    setRequests([]);
+                    setLoading(false);
+                }
+            }
+        };
+
+        tryFetch();
     };
 
     const handleView = (request) => {
@@ -76,7 +91,7 @@ export default function RequestHistory() {
         switch (status) {
             case 'approved': return 'status-approved';
             case 'rejected': return 'status-rejected';
-            case 'purok_approved': return 'status-pending'; // Yellow styling
+            case 'purok_approved': return 'status-pending';
             default: return 'status-default';
         }
     };
@@ -91,10 +106,14 @@ export default function RequestHistory() {
                 {loading ? (
                     <div className="loading-container">
                         <div className="loading-spinner"></div>
-                        <p style={{marginTop: '10px', color: '#666'}}>Waking up server...</p>
+                        <p style={{marginTop: '10px', color: '#666'}}>Waking up server (this takes 30-50 seconds)...</p>
                     </div>
                 ) : error ? (
-                    <div className="error-message">{error}</div>
+                    <div className="error-message">
+                        {error}
+                        <br/><br/>
+                        <button onClick={fetchRequests} style={{padding: '10px 20px', background: '#0038A8', color: 'white', border: 'none', borderRadius: '5px', cursor: 'pointer'}}>Try Again</button>
+                    </div>
                 ) : (
                     <>
                         <div className="filters-container">
@@ -159,7 +178,7 @@ export default function RequestHistory() {
                                             <tr>
                                                 <td colSpan="6">
                                                     <div className="no-requests-message">
-                                                        No document requests found. If you just requested one, it might be pending approval.
+                                                        No document requests found.
                                                     </div>
                                                 </td>
                                             </tr>
