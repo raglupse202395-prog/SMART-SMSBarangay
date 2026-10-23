@@ -12,6 +12,31 @@ axios.interceptors.request.use((config) => {
     return config;
 });
 
+// --- NEW: AUTO-RETRY FOR RENDER FREE TIER ---
+// If the backend is asleep, this waits 5 seconds and tries again automatically.
+axios.interceptors.response.use(
+  (response) => response,
+  async (error) => {
+    const originalRequest = error.config;
+    if (!originalRequest._retryCount) {
+      originalRequest._retryCount = 0;
+    }
+    
+    // If the server is sleeping (Network Error or 504 Timeout) and we haven't retried 3 times yet
+    if (originalRequest._retryCount < 3 && (error.code === 'ERR_NETWORK' || error.message === 'Network Error' || error.response?.status === 504)) {
+      originalRequest._retryCount += 1;
+      console.log(`Backend is waking up... Retrying (${originalRequest._retryCount}/3)`);
+      
+      // Wait 5 seconds before retrying
+      await new Promise(resolve => setTimeout(resolve, 5000));
+      return axios(originalRequest);
+    }
+    
+    return Promise.reject(error);
+  }
+);
+// ---------------------------------------------
+
 // --- RESIDENTS ---
 export const getResidents = async () => (await axios.get(`${baseUrl}/resident/all`)).data
 export const registerResident = async (residentData) => (await axios.post(`${baseUrl}/resident/register`, residentData)).data
