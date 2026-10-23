@@ -1,8 +1,6 @@
 import axios from 'axios'
 
-// This tells Vite to use the Render Environment Variable in production, 
-// but fallback to '/api' when testing on localhost.
-const baseUrl = import.meta.env.VITE_API_URL || '/api';
+const baseUrl = '/api'
 
 // Automatically attach the login token to every request
 axios.interceptors.request.use((config) => {
