@@ -45,7 +45,6 @@ export default function DocumentRequest() {
         }
     };
 
-    // FINAL Barangay Approval (Sends SMS)
     const handleFinalApprove = async (id, approvalDetails) => {
         try {
             await apiService.updateDocumentRequestStatus(id, 'approved', { approvalDetails });
@@ -129,8 +128,8 @@ export default function DocumentRequest() {
                                             <td>{request.documentType}</td>
                                             <td>{getStatusBadge(request.status)}</td>
                                             <td>
-                                                {/* SHOW ACTIONS IF STATUS IS PENDING OR PENDING_BARANGAY */}
-                                                {(request.status === 'pending' || request.status === 'pending_barangay') && (
+                                                {/* FIXED: Show buttons for any status that is NOT approved or rejected */}
+                                                {request.status !== 'approved' && request.status !== 'rejected' && (
                                                     <div style={{ display: 'flex', gap: '8px' }}>
                                                         <button onClick={() => setApprovalModal({ isOpen: true, requestData: request })} style={{ padding: '6px 12px', background: '#10b981', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>
                                                             Final Approve & Send SMS
