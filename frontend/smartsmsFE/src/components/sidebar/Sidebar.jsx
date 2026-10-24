@@ -1,15 +1,13 @@
-import React from 'react';
+import React, { useContext } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import '../../styles/Sidebar.css';
 import { 
     FaHome, FaBullhorn, FaHistory, FaFileAlt, 
-    FaClipboardList, FaUsers, FaHome as FaHouse, 
-    FaUserShield, FaListAlt, FaCog, FaSignOutAlt 
+    FaClipboardList, FaUsers, FaUserShield, FaListAlt, FaCog, FaSignOutAlt 
 } from 'react-icons/fa';
 import { MdFamilyRestroom } from "react-icons/md";
 import { jwtDecode } from 'jwt-decode';
 import AuthContext from '../../context/AuthContext';
-import { useContext } from 'react';
 
 export default function CustomSidebar({ closeSidebar }) {
     const navigate = useNavigate();
@@ -25,7 +23,7 @@ export default function CustomSidebar({ closeSidebar }) {
 
     const handleNavigation = (path) => {
         navigate(path);
-        if (closeSidebar) closeSidebar(); // Closes sidebar on mobile
+        if (closeSidebar) closeSidebar();
     };
 
     const handleLogout = () => {
@@ -55,11 +53,17 @@ export default function CustomSidebar({ closeSidebar }) {
                 <div className={isActive('/admin/broadcast-history')} onClick={() => handleNavigation('/admin/broadcast-history')}>
                     <FaHistory /> Broadcast History
                 </div>
+                
+                {/* ADDED PUROK DASHBOARD LINK */}
+                <div className={isActive('/admin/purok-dashboard')} onClick={() => handleNavigation('/admin/purok-dashboard')}>
+                    <FaFileAlt /> Purok Approval
+                </div>
+
                 <div className={isActive('/admin/document-request')} onClick={() => handleNavigation('/admin/document-request')}>
-                    <FaFileAlt /> Document Request
+                    <FaClipboardList /> Document Request
                 </div>
                 <div className={isActive('/admin/request-history')} onClick={() => handleNavigation('/admin/request-history')}>
-                    <FaClipboardList /> Request History
+                    <FaHistory /> Request History
                 </div>
                 <div className={isActive('/admin/residents')} onClick={() => handleNavigation('/admin/residents')}>
                     <FaUsers /> Residents
@@ -68,8 +72,7 @@ export default function CustomSidebar({ closeSidebar }) {
                     <MdFamilyRestroom /> Households
                 </div>
 
-                {/* Only show Admin specific links to Superadmin */}
-                {decoded?.role === 'superadmin' && (
+                {decoded?.role === 'superadmin' || decoded?.role === 'master_admin' ? (
                     <>
                         <div className={isActive('/admin/admin-accounts')} onClick={() => handleNavigation('/admin/admin-accounts')}>
                             <FaUserShield /> Admin Accounts
@@ -78,7 +81,7 @@ export default function CustomSidebar({ closeSidebar }) {
                             <FaListAlt /> Admin History
                         </div>
                     </>
-                )}
+                ) : null}
 
                 <div className={isActive('/admin/settings')} onClick={() => handleNavigation('/admin/settings')}>
                     <FaCog /> Settings
@@ -92,14 +95,14 @@ export default function CustomSidebar({ closeSidebar }) {
                     </div>
                     <div>
                         <div className="user-name">{decoded?.fullname || 'Admin'}</div>
-                        <div className="user-role">Barangay Role: <b>{decoded?.role || 'Admin'}</b></div>
+                        <div className="user-role">Role: <b>{decoded?.role || 'Admin'}</b></div>
                     </div>
                 </div>
                 <button className="logout-btn" onClick={handleLogout}>
                     <FaSignOutAlt style={{ marginRight: '8px' }} /> Logout
                 </button>
                 <div className="copyright">
-                    © Made By Group E.C.T 
+                    © Made By Group E.C.T
                 </div>
             </div>
         </div>

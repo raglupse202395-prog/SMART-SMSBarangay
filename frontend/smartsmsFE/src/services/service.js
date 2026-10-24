@@ -12,31 +12,6 @@ axios.interceptors.request.use((config) => {
     return config;
 });
 
-// --- NEW: AUTO-RETRY FOR RENDER FREE TIER ---
-// If the backend is asleep, this waits 5 seconds and tries again automatically.
-axios.interceptors.response.use(
-  (response) => response,
-  async (error) => {
-    const originalRequest = error.config;
-    if (!originalRequest._retryCount) {
-      originalRequest._retryCount = 0;
-    }
-    
-    // If the server is sleeping (Network Error or 504 Timeout) and we haven't retried 3 times yet
-    if (originalRequest._retryCount < 3 && (error.code === 'ERR_NETWORK' || error.message === 'Network Error' || error.response?.status === 504)) {
-      originalRequest._retryCount += 1;
-      console.log(`Backend is waking up... Retrying (${originalRequest._retryCount}/3)`);
-      
-      // Wait 5 seconds before retrying
-      await new Promise(resolve => setTimeout(resolve, 5000));
-      return axios(originalRequest);
-    }
-    
-    return Promise.reject(error);
-  }
-);
-// ---------------------------------------------
-
 // --- RESIDENTS ---
 export const getResidents = async () => (await axios.get(`${baseUrl}/resident/all`)).data
 export const registerResident = async (residentData) => (await axios.post(`${baseUrl}/resident/register`, residentData)).data
@@ -78,6 +53,11 @@ export const updateDocumentRequestStatus = async (id, status, additionalData = {
     throw new Error(error.message || "Network error");
   }
 }
+
+// --- PUROK ROUTES ---
+export const getPurokPendingRequests = async () => (await axios.get(`${baseUrl}/purok/pending`)).data
+export const purokApproveRequest = async (id) => (await axios.put(`${baseUrl}/purok/approve/${id}`)).data
+export const purokRejectRequest = async (id, reason) => (await axios.put(`${baseUrl}/purok/reject/${id}`, { reason })).data
 
 // --- ADMIN AUTH & ACCOUNTS ---
 export const loginAdmin = async (username, password) => (await axios.post(`${baseUrl}/admin/login`, { username, password })).data
@@ -124,8 +104,8 @@ export const deleteHouseholdWithResidents = async (id) => (await axios.delete(`$
 export default {
   getResidents, registerResident, deleteResident, updateResident, sendSms,
   getBroadcastHistory, deleteBroadcastHistory,
-  submitDocumentRequest, getAllDocumentRequests, 
-  getPendingDocumentRequests, updateDocumentRequestStatus,
+  submitDocumentRequest, getAllDocumentRequests, getPendingDocumentRequests, updateDocumentRequestStatus,
+  getPurokPendingRequests, purokApproveRequest, purokRejectRequest,
   loginAdmin, verifyAdminToken, getAdminAccounts, addAdminAccount, updateAdminAccount,
   deleteAdminAccount, getAdminActionHistory, getTemplates, addTemplate, updateTemplate,
   deleteTemplate, getHouseholds, getHousehold, getHouseholdForPrint, createHousehold,
