@@ -1,37 +1,38 @@
 const mongoose = require('mongoose');
 
 const DocumentSchema = new mongoose.Schema({
-    email: { type: String, trim: true, default: 'N/A' },
-    phoneNumber: { type: String, trim: true, default: 'N/A' },
-    address: { type: String, trim: true, default: 'N/A' },
-    fullName: { type: String, trim: true, default: 'N/A' },
-    purpose: { type: String, trim: true, default: 'N/A' },
-    documentType: { type: String, trim: true, default: 'N/A' },
-    
-    // UPDATED STATUSES
-    status: { 
-        type: String, 
-        enum: ['pending_purok', 'pending_barangay', 'approved', 'rejected'], 
-        default: 'pending_purok' 
+    email: { type: String, required: true, trim: true },
+    phoneNumber: { type: String, required: true, trim: true },
+    address: { type: String, required: true, trim: true },
+    fullName: { type: String, required: true, trim: true },
+    purpose: { type: String, required: true, trim: true },
+    documentType: { type: String, required: true, trim: true },
+
+    status: {
+        type: String,
+        enum: ['pending', 'approved', 'rejected'],
+        default: 'pending'
     },
-    
-    purokApprovedBy: { type: String }, 
-    purokApprovedAt: { type: Date },   
+
+    purokStatus: {
+        type: String,
+        enum: ['pending', 'approved', 'rejected'],
+        default: 'pending'
+    },
+
+    purokApprovedBy: { type: String },
+    purokApprovedAt: { type: Date },
 
     approvalDetails: {
         pickupDate: String,
         pickupTime: String,
         officeHours: String,
-        instructions: String
+        instructions: String,
     },
     rejectionReason: { type: String, trim: true },
     createdAt: {
         type: Date,
-        default: () => {
-            const now = new Date();
-            const offset = 8 * 60;
-            return new Date(now.getTime() + offset * 60 * 1000);
-        },
+        default: () => new Date(),
     },
 });
 

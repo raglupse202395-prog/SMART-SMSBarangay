@@ -44,16 +44,6 @@ const requireRole = (role) => (req, res, next) => {
     }).catch(() => res.status(500).json({ error: 'Server error' }));
 };
 
-const requireAnyRole = (roles) => (req, res, next) => {
-    if (!req.user || !req.user.userId) return res.status(401).json({ error: 'Unauthorized' });
-    Admin.findById(req.user.userId).then(user => {
-        if (!user || !roles.includes(user.role)) {
-            return res.status(403).json({ error: 'Forbidden: Insufficient role' });
-        }
-        next();
-    }).catch(() => res.status(500).json({ error: 'Server error' }));
-};
-
 routes.post('/api/admin/login', async (req, res) => {
     try {
         const { username, password } = req.body
@@ -286,11 +276,12 @@ routes.post('/api/resident/documentRequest', async (req, res) => {
             fullName: fullName || 'N/A', 
             purpose: purpose || 'N/A', 
             documentType: documentType || 'N/A',
-            status: 'pending_purok' 
+            status: 'pending',        
+            purokStatus: 'pending'    
         });
         await newRequest.save();
 
-        return res.status(201).json({ message: 'Document request submitted successfully!' });
+        return res.status(201).json({ message: 'Request submitted to Purok President for approval.' });
 
     } catch (error) {
         console.error("❌ DATABASE ERROR:", error);
@@ -298,21 +289,13 @@ routes.post('/api/resident/documentRequest', async (req, res) => {
     }
 });
 
+// Barangay Admin ONLY sees requests that the Purok President has already approved
 routes.get('/api/admin/allrequest', authMiddleware, async (req, res) => {
     try {
-        const requests = await Request.find({}).sort({ createdAt: -1 });
-        return res.status(200).json({ count: requests ? requests.length : 0, requests: requests || [] });
+        const requests = await Request.find({ purokStatus: 'approved' }).sort({ createdAt: -1 });
+        return res.status(200).json({ count: requests.length, requests: requests });
     } catch (error) {
         return res.status(200).json({ count: 0, requests: [] }); 
-    }
-});
-
-routes.get('/api/admin/pendingrequest', authMiddleware, async (req, res) => {
-    try {
-        const pendingRequests = await Request.find({ status: { $in: ['pending_purok', 'pending_barangay'] } }).sort({ createdAt: -1 });
-        return res.status(200).json({ count: pendingRequests ? pendingRequests.length : 0, requests: pendingRequests || [] });
-    } catch (error) {
-        return res.status(200).json({ count: 0, requests: [] });
     }
 });
 
@@ -321,89 +304,79 @@ routes.put('/api/admin/updaterequests/:id', authMiddleware, async (req, res) => 
         const { id } = req.params;
         const { status, approvalDetails, rejectionReason } = req.body;
 
-        if (!['pending_purok', 'pending_barangay', 'approved', 'rejected'].includes(status)) {
-            return res.status(400).json({ success: false, message: 'Invalid status value' });
-        }
-
         const updateData = { status };
-        
-        if (status === 'pending_barangay') {
-            updateData.purokApprovedBy = req.user.fullname || req.user.username;
-            updateData.purokApprovedAt = new Date();
-        }
-
-        if (status === 'approved' && approvalDetails) {
-            updateData.approvalDetails = approvalDetails;
-        }
-
-        if (status === 'rejected' && rejectionReason) {
-            updateData.rejectionReason = rejectionReason;
-        }
+        if (status === 'approved' && approvalDetails) updateData.approvalDetails = approvalDetails;
+        if (status === 'rejected' && rejectionReason) updateData.rejectionReason = rejectionReason;
 
         const updatedRequest = await Request.findByIdAndUpdate(id, updateData, { new: true });
-
         if (!updatedRequest) return res.status(404).json({ success: false, message: 'Not found' });
 
-        if (req.user && req.user.userId && req.user.username) {
-            await AdminActionHistory.create({
-                adminId: req.user.userId,
-                adminUsername: req.user.username,
-                action: `${status} document request`,
-                target: id,
-                details: {
-                    requestId: id, 
-                    status,
-                    fullName: updatedRequest.fullName,
-                    documentType: updatedRequest.documentType
-                }
-            });
-        }
-
         if (status === 'approved' && approvalDetails) {
-            try {
-                await sendApprovalEmail(updatedRequest.email, updatedRequest.fullName, updatedRequest.documentType, approvalDetails);
-            } catch (emailErr) {
-                console.error("⚠️ Email failed:", emailErr.message);
-            }
-            
+            try { await sendApprovalEmail(updatedRequest.email, updatedRequest.fullName, updatedRequest.documentType, approvalDetails); } catch (e) {}
             try {
                 const smsMessage = `[POB 1] Hi ${updatedRequest.fullName.split(' ')[0]}, your ${updatedRequest.documentType} is APPROVED. Pickup on ${new Date(approvalDetails.pickupDate).toLocaleDateString('en-PH')} at ${approvalDetails.pickupTime}. Please bring valid ID.`;
-                
                 const httpFetchClient = {
                     get: async (url, headers) => (await fetch(url, { method: "GET", headers })).json(),
                     post: async (url, body, headers) => (await fetch(url, { method: "POST", headers, body: JSON.stringify(body) })).json(),
                     delete: async (url, headers) => (await fetch(url, { method: "DELETE", headers })).json()
                 };
-                
                 const smsClient = new Client(process.env.SMS_GATEWAY_LOGIN, process.env.SMS_GATEWAY_PASSWORD, httpFetchClient);
-                
                 let phone = updatedRequest.phoneNumber;
                 if (phone.startsWith('09')) phone = '+63' + phone.substring(1);
-
-                await smsClient.send({
-                    message: smsMessage,
-                    phoneNumbers: [phone],
-                    simNumber: parseInt(process.env.SIM_NUMBER) || 1
-                });
-            } catch (smsErr) {
-                console.error("⚠️ SMS failed:", smsErr.message);
-            }
+                await smsClient.send({ message: smsMessage, phoneNumbers: [phone], simNumber: parseInt(process.env.SIM_NUMBER) || 1 });
+            } catch (smsErr) {}
         } else if (status === 'rejected' && rejectionReason) {
-            try {
-                await sendRejectionEmail(updatedRequest.email, updatedRequest.fullName, updatedRequest.documentType, rejectionReason);
-            } catch (emailErr) {
-                console.error("⚠️ Rejection Email failed:", emailErr.message);
-            }
+            try { await sendRejectionEmail(updatedRequest.email, updatedRequest.fullName, updatedRequest.documentType, rejectionReason); } catch (e) {}
         }
 
         return res.status(200).json({ success: true, data: updatedRequest });
     } catch (error) {
-        console.error("❌ APPROVAL DATABASE ERROR:", error);
-        return res.status(500).json({ success: false, message: 'Server error: ' + error.message });
+        return res.status(500).json({ success: false, message: 'Server error' });
     }
 });
 
-routes.get('/api/admin/action-history', authMiddleware, requireAnyRole(['superadmin', 'captain', 'admin']), async (req, res) => {
+// PUROK PRESIDENT ROUTES
+routes.get('/api/purok/pending', authMiddleware, async (req, res) => {
+    try {
+        const requests = await Request.find({ purokStatus: 'pending' }).sort({ createdAt: -1 });
+        return res.status(200).json({ count: requests.length, requests: requests });
+    } catch (error) {
+        return res.status(200).json({ count: 0, requests: [] }); 
+    }
+});
+
+routes.put('/api/purok/approve/:id', authMiddleware, async (req, res) => {
+    try {
+        const { id } = req.params;
+        const updatedRequest = await Request.findByIdAndUpdate(
+            id, 
+            { purokStatus: 'approved', purokApprovedBy: req.user.fullname || req.user.username, purokApprovedAt: new Date() }, 
+            { new: true }
+        );
+        if (!updatedRequest) return res.status(404).json({ message: 'Request not found' });
+        return res.status(200).json({ success: true, data: updatedRequest });
+    } catch (error) {
+        return res.status(500).json({ message: 'Server error' });
+    }
+});
+
+routes.put('/api/purok/reject/:id', authMiddleware, async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { reason } = req.body;
+        const updatedRequest = await Request.findByIdAndUpdate(
+            id, 
+            { purokStatus: 'rejected', rejectionReason: reason }, 
+            { new: true }
+        );
+        if (!updatedRequest) return res.status(404).json({ message: 'Request not found' });
+        return res.status(200).json({ success: true, data: updatedRequest });
+    } catch (error) {
+        return res.status(500).json({ message: 'Server error' });
+    }
+});
+
+routes.get('/api/admin/action-history', authMiddleware, async (req, res) => {
     try {
         const history = await AdminActionHistory.find({}).sort({ createdAt: -1 }).limit(200);
         res.json(history || []);
@@ -412,7 +385,7 @@ routes.get('/api/admin/action-history', authMiddleware, requireAnyRole(['superad
     }
 });
 
-routes.delete('/api/templates/:id', authMiddleware, requireAnyRole(['superadmin', 'captain', 'secretary', 'admin']), async (req, res) => {
+routes.delete('/api/templates/:id', authMiddleware, async (req, res) => {
     try {
         const template = await BroadcastTemplate.findByIdAndDelete(req.params.id);
         if (!template) return res.status(404).json({ error: 'Template not found' });
@@ -431,7 +404,7 @@ routes.get('/api/templates', authMiddleware, async (req, res) => {
     }
 });
 
-routes.post('/api/templates', authMiddleware, requireAnyRole(['superadmin', 'captain', 'secretary', 'admin']), async (req, res) => {
+routes.post('/api/templates', authMiddleware, async (req, res) => {
     try {
         const { title, message } = req.body;
         const template = new BroadcastTemplate({ title, message });
@@ -442,7 +415,7 @@ routes.post('/api/templates', authMiddleware, requireAnyRole(['superadmin', 'cap
     }
 });
 
-routes.put('/api/templates/:id', authMiddleware, requireAnyRole(['superadmin', 'captain', 'secretary', 'admin']), async (req, res) => {
+routes.put('/api/templates/:id', authMiddleware, async (req, res) => {
     try {
         const { title, message } = req.body;
         const template = await BroadcastTemplate.findByIdAndUpdate(
@@ -486,23 +459,6 @@ routes.post('/api/admin/accounts', authMiddleware, async (req, res) => {
             role: role || 'admin'
         });
 
-        if (req.user && req.user.userId && req.user.username) {
-            await AdminActionHistory.create({
-                adminId: req.user.userId,
-                adminUsername: req.user.username,
-                action: 'created admin account',
-                target: newAdmin._id,
-                details: {
-                    adminId: newAdmin._id,
-                    username: newAdmin.username,
-                    fullName: newAdmin.fullname,
-                    phoneNumber: newAdmin.phoneNumber,
-                    email: newAdmin.email || 'N/A',
-                    role: newAdmin.role
-                }
-            });
-        }
-
         res.status(201).json({ message: 'Admin created', admin: { ...newAdmin.toObject(), password: undefined } });
     } catch (err) {
         res.status(500).json({ error: err.message });
@@ -525,8 +481,6 @@ routes.put('/api/admin/accounts/:id', authMiddleware, async (req, res) => {
             return res.status(403).json({ error: 'Cannot update superadmin' });
         }
 
-        const originalValues = { fullname: admin.fullname, phoneNumber: admin.phoneNumber, email: admin.email, role: admin.role };
-
         if (fullname) admin.fullname = fullname;
         if (phoneNumber) admin.phoneNumber = phoneNumber;
         if (email) admin.email = email;
@@ -534,29 +488,6 @@ routes.put('/api/admin/accounts/:id', authMiddleware, async (req, res) => {
         if (password) admin.password = await bcrypt.hash(password, 10);
         
         await admin.save();
-
-        if (req.user && req.user.userId && req.user.username) {
-            const changes = [];
-            if (fullname && fullname !== originalValues.fullname) changes.push(`fullname: ${originalValues.fullname} → ${fullname}`);
-            if (phoneNumber && phoneNumber !== originalValues.phoneNumber) changes.push(`phone: ${originalValues.phoneNumber} → ${phoneNumber}`);
-            if (email && email !== originalValues.email) changes.push(`email: ${originalValues.email} → ${email}`);
-            if (role && role !== originalValues.role) changes.push(`role: ${originalValues.role} → ${role}`);
-            if (password) changes.push('password updated');
-
-            if (changes.length > 0) {
-                await AdminActionHistory.create({
-                    adminId: req.user.userId,
-                    adminUsername: req.user.username,
-                    action: 'updated admin account',
-                    target: id,
-                    details: {
-                        adminId: id,
-                        username: admin.username,
-                        changes: changes.join(', ')
-                    }
-                });
-            }
-        }
 
         res.json({ message: 'Admin updated', admin: { ...admin.toObject(), password: undefined } });
     } catch (err) {
@@ -571,38 +502,19 @@ routes.delete('/api/admin/accounts/:id', authMiddleware, async (req, res) => {
         if (!admin) return res.status(404).json({ error: 'Admin not found' });
         if (admin.role === 'superadmin') return res.status(403).json({ error: 'Cannot delete superadmin' });
 
-        const adminInfo = {
-            username: admin.username,
-            fullname: admin.fullname,
-            phoneNumber: admin.phoneNumber,
-            role: admin.role
-        };
-
         await admin.deleteOne();
-
-        if (req.user && req.user.userId && req.user.username) {
-            await AdminActionHistory.create({
-                adminId: req.user.userId,
-                adminUsername: req.user.username,
-                action: 'deleted admin account',
-                target: id,
-                details: { adminId: id, ...adminInfo }
-            });
-        }
-
         res.json({ message: 'Admin deleted' });
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
 });
 
+// HOUSEHOLDS
 const createHouseholdAudit = async (householdId, action, changedBy, changes = {}, memberDetails = null) => {
     try {
         const audit = new HouseholdAudit({ householdId, action, changedBy, changes, memberDetails });
         await audit.save();
-    } catch (error) {
-        console.error('Error creating audit log:', error);
-    }
+    } catch (error) {}
 };
 
 routes.get('/api/households', authMiddleware, async (req, res) => {
@@ -900,21 +812,6 @@ routes.delete('/api/households/:id/with-residents', authMiddleware, async (req, 
             deletedAt: new Date(),
             deletedResidents: members.map(m => ({ id: m._id, name: `${m.first_name} ${m.last_name}`, phone: m.contact?.phone }))
         });
-
-        if (req.user && req.user.userId && req.user.username) {
-            await AdminActionHistory.create({
-                adminId: req.user.userId,
-                adminUsername: req.user.username,
-                action: 'deleted household with residents',
-                target: req.params.id,
-                details: {
-                    householdId: req.params.id,
-                    householdAddress: household.householdAddress,
-                    deletedResidentsCount: members.length,
-                    deletedResidents: members.map(m => `${m.first_name} ${m.last_name}`).join(', ')
-                }
-            });
-        }
 
         res.json({ message: 'Household and all residents deleted', deletedResidentsCount: members.length });
     } catch (error) {
