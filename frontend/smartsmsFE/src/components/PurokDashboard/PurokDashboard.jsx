@@ -9,6 +9,7 @@ export default function PurokDashboard() {
     const [error, setError] = useState(null);
     const [rejectionModal, setRejectionModal] = useState({ isOpen: false, requestData: null });
     const [rejectReason, setRejectReason] = useState('');
+    const [actionLoading, setActionLoading] = useState(false);
 
     useEffect(() => { fetchPurokRequests(); }, []);
 
@@ -19,7 +20,7 @@ export default function PurokDashboard() {
             setRequests(response.requests || []);
             setError(null);
         } catch (err) {
-            setError('Error fetching Purok requests. Server might be waking up.');
+            setError('Error fetching Purok requests.');
         } finally {
             setLoading(false);
         }
@@ -27,16 +28,20 @@ export default function PurokDashboard() {
 
     const handleApprove = async (id) => {
         try {
+            setActionLoading(true);
             await apiService.purokApproveRequest(id);
-            alert("✅ Approved! The request is now sent to the Barangay Admin.");
+            alert("✅ Approved! The resident has been texted to pick up their Purok Clearance. The request is now forwarded to the Barangay Admin.");
             fetchPurokRequests();
         } catch (err) {
             alert("Failed to approve: " + err.message);
+        } finally {
+            setActionLoading(false);
         }
     };
 
     const handleReject = async () => {
         try {
+            setActionLoading(true);
             await apiService.purokRejectRequest(rejectionModal.requestData._id, rejectReason);
             alert("❌ Request Rejected.");
             setRejectionModal({ isOpen: false, requestData: null });
@@ -44,6 +49,8 @@ export default function PurokDashboard() {
             fetchPurokRequests();
         } catch (err) {
             alert("Failed to reject: " + err.message);
+        } finally {
+            setActionLoading(false);
         }
     };
 
@@ -82,10 +89,18 @@ export default function PurokDashboard() {
                                             <td>{request.purpose}</td>
                                             <td>
                                                 <div style={{ display: 'flex', gap: '8px' }}>
-                                                    <button onClick={() => handleApprove(request._id)} style={{ padding: '6px 12px', background: '#10b981', color: 'white', border: 'none', borderRadius: '4px', fontWeight: 'bold', cursor: 'pointer' }}>
-                                                        Approve
+                                                    <button 
+                                                        onClick={() => handleApprove(request._id)} 
+                                                        disabled={actionLoading}
+                                                        style={{ padding: '6px 12px', background: '#10b981', color: 'white', border: 'none', borderRadius: '4px', fontWeight: 'bold', cursor: actionLoading ? 'not-allowed' : 'pointer', opacity: actionLoading ? 0.7 : 1 }}
+                                                    >
+                                                        {actionLoading ? '...' : 'Approve & Send SMS'}
                                                     </button>
-                                                    <button onClick={() => setRejectionModal({ isOpen: true, requestData: request })} style={{ padding: '6px 12px', background: '#ef4444', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>
+                                                    <button 
+                                                        onClick={() => setRejectionModal({ isOpen: true, requestData: request })} 
+                                                        disabled={actionLoading}
+                                                        style={{ padding: '6px 12px', background: '#ef4444', color: 'white', border: 'none', borderRadius: '4px', cursor: actionLoading ? 'not-allowed' : 'pointer', opacity: actionLoading ? 0.7 : 1 }}
+                                                    >
                                                         Reject
                                                     </button>
                                                 </div>

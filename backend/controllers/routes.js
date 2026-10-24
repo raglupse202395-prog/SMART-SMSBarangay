@@ -228,7 +228,6 @@ Please bring a valid ID when claiming your document.
 
 Thank you,
 Barangay Poblacion 1
-Clarin, Misamis Occidental
     `;
     await transporter.sendMail({
         from: process.env.GMAIL_USER,
@@ -255,7 +254,6 @@ You may submit a new request with the necessary corrections.
 
 Thank you,
 Barangay Poblacion 1
-Clarin, Misamis Occidental
     `;
     await transporter.sendMail({
         from: process.env.GMAIL_USER,
@@ -289,7 +287,6 @@ routes.post('/api/resident/documentRequest', async (req, res) => {
     }
 });
 
-// Barangay Admin ONLY sees requests that the Purok President has already approved
 routes.get('/api/admin/allrequest', authMiddleware, async (req, res) => {
     try {
         const requests = await Request.find({ purokStatus: 'approved' }).sort({ createdAt: -1 });
@@ -335,7 +332,7 @@ routes.put('/api/admin/updaterequests/:id', authMiddleware, async (req, res) => 
     }
 });
 
-// PUROK PRESIDENT ROUTES
+// --- PUROK PRESIDENT ROUTES ---
 routes.get('/api/purok/pending', authMiddleware, async (req, res) => {
     try {
         const requests = await Request.find({ purokStatus: 'pending' }).sort({ createdAt: -1 });
@@ -345,21 +342,55 @@ routes.get('/api/purok/pending', authMiddleware, async (req, res) => {
     }
 });
 
+// Purok President approves a request (SENDS SMS FOR PUROK CLEARANCE)
 routes.put('/api/purok/approve/:id', authMiddleware, async (req, res) => {
     try {
         const { id } = req.params;
         const updatedRequest = await Request.findByIdAndUpdate(
             id, 
-            { purokStatus: 'approved', purokApprovedBy: req.user.fullname || req.user.username, purokApprovedAt: new Date() }, 
+            { 
+                purokStatus: 'approved', 
+                purokApprovedBy: req.user.fullname || req.user.username, 
+                purokApprovedAt: new Date() 
+            }, 
             { new: true }
         );
+
         if (!updatedRequest) return res.status(404).json({ message: 'Request not found' });
+
+        // --- SEND SMS FOR PUROK CLEARANCE ---
+        try {
+            const smsMessage = `[POB 1] Hi ${updatedRequest.fullName.split(' ')[0]}, your Purok Clearance for ${updatedRequest.documentType} is now ready for pickup at the Purok President's office. Please wait for the Barangay Admin to approve your final Barangay document.`;
+            
+            const httpFetchClient = {
+                get: async (url, headers) => (await fetch(url, { method: "GET", headers })).json(),
+                post: async (url, body, headers) => (await fetch(url, { method: "POST", headers, body: JSON.stringify(body) })).json(),
+                delete: async (url, headers) => (await fetch(url, { method: "DELETE", headers })).json()
+            };
+            
+            const smsClient = new Client(process.env.SMS_GATEWAY_LOGIN, process.env.SMS_GATEWAY_PASSWORD, httpFetchClient);
+            
+            let phone = updatedRequest.phoneNumber;
+            if (phone.startsWith('09')) phone = '+63' + phone.substring(1);
+
+            await smsClient.send({
+                message: smsMessage,
+                phoneNumbers: [phone],
+                simNumber: parseInt(process.env.SIM_NUMBER) || 1
+            });
+            console.log(`✅ Purok Approval SMS sent to ${phone}`);
+        } catch (smsErr) {
+            console.error("⚠️ Purok SMS failed to send:", smsErr.message);
+        }
+
         return res.status(200).json({ success: true, data: updatedRequest });
     } catch (error) {
+        console.error("❌ Purok Approve Error:", error);
         return res.status(500).json({ message: 'Server error' });
     }
 });
 
+// Purok President rejects a request
 routes.put('/api/purok/reject/:id', authMiddleware, async (req, res) => {
     try {
         const { id } = req.params;
