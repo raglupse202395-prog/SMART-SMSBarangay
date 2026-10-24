@@ -13,8 +13,6 @@ export default function DocumentRequest() {
     const [approvalModal, setApprovalModal] = useState({ isOpen: false, requestData: null });
     const [rejectionModal, setRejectionModal] = useState({ isOpen: false, requestData: null });
     const [searchTerm, setSearchTerm] = useState('');
-    
-    // CHANGED DEFAULT TO 'all' SO YOU CAN SEE YOUR TEST IMMEDIATELY
     const [statusFilter, setStatusFilter] = useState('all'); 
 
     useEffect(() => { fetchRequests(); }, []);
@@ -47,18 +45,7 @@ export default function DocumentRequest() {
         }
     };
 
-    // STEP 1: Purok Approval
-    const handlePurokApprove = async (id) => {
-        try {
-            await apiService.updateDocumentRequestStatus(id, 'pending_barangay');
-            setRequests(requests.map(r => r._id === id ? { ...r, status: 'pending_barangay' } : r));
-            alert("✅ Purok Approval granted! The request is now waiting for the Barangay Admin.");
-        } catch (err) {
-            alert("Failed to approve at Purok level: " + err.message);
-        }
-    };
-
-    // STEP 2: Final Barangay Approval (Sends SMS)
+    // FINAL Barangay Approval (Sends SMS)
     const handleFinalApprove = async (id, approvalDetails) => {
         try {
             await apiService.updateDocumentRequestStatus(id, 'approved', { approvalDetails });
@@ -79,7 +66,7 @@ export default function DocumentRequest() {
 
     const getStatusBadge = (status) => {
         switch (status) {
-            case 'pending_purok': return <span style={{background: '#fef3c7', color: '#92400e', padding: '4px 8px', borderRadius: '4px', fontSize: '12px', fontWeight: 'bold'}}>PENDING PUROK</span>;
+            case 'pending': return <span style={{background: '#fef3c7', color: '#92400e', padding: '4px 8px', borderRadius: '4px', fontSize: '12px', fontWeight: 'bold'}}>PENDING PUROK</span>;
             case 'pending_barangay': return <span style={{background: '#e0e7ff', color: '#3730a3', padding: '4px 8px', borderRadius: '4px', fontSize: '12px', fontWeight: 'bold'}}>PUROK APPROVED (FOR BRGY)</span>;
             case 'approved': return <span style={{background: '#d1fae5', color: '#065f46', padding: '4px 8px', borderRadius: '4px', fontSize: '12px', fontWeight: 'bold'}}>COMPLETED</span>;
             case 'rejected': return <span style={{background: '#fee2e2', color: '#b91c1c', padding: '4px 8px', borderRadius: '4px', fontSize: '12px', fontWeight: 'bold'}}>REJECTED</span>;
@@ -104,7 +91,7 @@ export default function DocumentRequest() {
                         style={{ padding: '10px', borderRadius: '5px', border: '1px solid #ccc' }}
                     >
                         <option value="all">Show All Requests</option>
-                        <option value="pending_purok">Pending Purok</option>
+                        <option value="pending">Pending Purok</option>
                         <option value="pending_barangay">Purok Approved (For Final)</option>
                         <option value="approved">Completed</option>
                         <option value="rejected">Rejected</option>
@@ -142,20 +129,8 @@ export default function DocumentRequest() {
                                             <td>{request.documentType}</td>
                                             <td>{getStatusBadge(request.status)}</td>
                                             <td>
-                                                {/* STEP 1: Purok Approval */}
-                                                {request.status === 'pending_purok' && (
-                                                    <div style={{ display: 'flex', gap: '8px' }}>
-                                                        <button onClick={() => handlePurokApprove(request._id)} style={{ padding: '6px 12px', background: '#FCD116', color: '#0038A8', border: 'none', borderRadius: '4px', fontWeight: 'bold', cursor: 'pointer' }}>
-                                                            Purok Approve
-                                                        </button>
-                                                        <button onClick={() => setRejectionModal({ isOpen: true, requestData: request })} style={{ padding: '6px 12px', background: '#ef4444', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>
-                                                            Reject
-                                                        </button>
-                                                    </div>
-                                                )}
-
-                                                {/* STEP 2: Final Barangay Approval */}
-                                                {request.status === 'pending_barangay' && (
+                                                {/* SHOW ACTIONS IF STATUS IS PENDING OR PENDING_BARANGAY */}
+                                                {(request.status === 'pending' || request.status === 'pending_barangay') && (
                                                     <div style={{ display: 'flex', gap: '8px' }}>
                                                         <button onClick={() => setApprovalModal({ isOpen: true, requestData: request })} style={{ padding: '6px 12px', background: '#10b981', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>
                                                             Final Approve & Send SMS
