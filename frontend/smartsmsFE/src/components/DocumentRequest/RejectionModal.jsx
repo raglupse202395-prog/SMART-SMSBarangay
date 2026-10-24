@@ -76,11 +76,12 @@ const RejectionModal = ({ isOpen, onClose, onReject, requestData }) => {
                             </div>
                         )}
                         <div className="rejection-warning">
-                            <p><strong>Note:</strong> An email will be sent to the requester explaining the rejection and the reason provided above.</p>
+                            {/* CHANGED TEXT FROM EMAIL TO SMS */}
+                            <p><strong>Note:</strong> An SMS will be sent to the requester explaining the rejection and the reason provided above.</p>
                         </div>
                         <div className="modal-actions">
                             <button type="button" onClick={onClose} className="cancel-button">Cancel</button>
-                            <button type="submit" disabled={isSubmitting} className="reject-button">{isSubmitting ? 'Rejecting...' : 'Reject & Send Email'}</button>
+                            <button type="submit" disabled={isSubmitting} className="reject-button">{isSubmitting ? 'Rejecting...' : 'Reject & Send SMS'}</button>
                         </div>
                     </form>
                 </div>

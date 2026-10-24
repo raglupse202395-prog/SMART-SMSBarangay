@@ -321,9 +321,32 @@ routes.put('/api/admin/updaterequests/:id', authMiddleware, async (req, res) => 
                 let phone = updatedRequest.phoneNumber;
                 if (phone.startsWith('09')) phone = '+63' + phone.substring(1);
                 await smsClient.send({ message: smsMessage, phoneNumbers: [phone], simNumber: parseInt(process.env.SIM_NUMBER) || 1 });
-            } catch (smsErr) {}
+            } catch (smsErr) { console.error("SMS failed", smsErr); }
         } else if (status === 'rejected' && rejectionReason) {
-            try { await sendRejectionEmail(updatedRequest.email, updatedRequest.fullName, updatedRequest.documentType, rejectionReason); } catch (e) {}
+            // --- CHANGED TO SEND SMS INSTEAD OF EMAIL ---
+            try {
+                const smsMessage = `[POB 1] Hi ${updatedRequest.fullName.split(' ')[0]}, we regret to inform you that your ${updatedRequest.documentType} request was REJECTED. Reason: ${rejectionReason}. Please visit the Barangay Hall for more info.`;
+                
+                const httpFetchClient = {
+                    get: async (url, headers) => (await fetch(url, { method: "GET", headers })).json(),
+                    post: async (url, body, headers) => (await fetch(url, { method: "POST", headers, body: JSON.stringify(body) })).json(),
+                    delete: async (url, headers) => (await fetch(url, { method: "DELETE", headers })).json()
+                };
+                
+                const smsClient = new Client(process.env.SMS_GATEWAY_LOGIN, process.env.SMS_GATEWAY_PASSWORD, httpFetchClient);
+                
+                let phone = updatedRequest.phoneNumber;
+                if (phone.startsWith('09')) phone = '+63' + phone.substring(1);
+
+                await smsClient.send({
+                    message: smsMessage,
+                    phoneNumbers: [phone],
+                    simNumber: parseInt(process.env.SIM_NUMBER) || 1
+                });
+                console.log(`✅ Rejection SMS sent to ${phone}`);
+            } catch (smsErr) {
+                console.error("⚠️ Rejection SMS failed to send:", smsErr.message);
+            }
         }
 
         return res.status(200).json({ success: true, data: updatedRequest });
@@ -342,7 +365,6 @@ routes.get('/api/purok/pending', authMiddleware, async (req, res) => {
     }
 });
 
-// Purok President approves a request (SENDS SMS FOR PUROK CLEARANCE)
 routes.put('/api/purok/approve/:id', authMiddleware, async (req, res) => {
     try {
         const { id } = req.params;
@@ -358,7 +380,6 @@ routes.put('/api/purok/approve/:id', authMiddleware, async (req, res) => {
 
         if (!updatedRequest) return res.status(404).json({ message: 'Request not found' });
 
-        // --- SEND SMS FOR PUROK CLEARANCE ---
         try {
             const smsMessage = `[POB 1] Hi ${updatedRequest.fullName.split(' ')[0]}, your Purok Clearance for ${updatedRequest.documentType} is now ready for pickup at the Purok President's office. Please wait for the Barangay Admin to approve your final Barangay document.`;
             
@@ -390,7 +411,6 @@ routes.put('/api/purok/approve/:id', authMiddleware, async (req, res) => {
     }
 });
 
-// Purok President rejects a request
 routes.put('/api/purok/reject/:id', authMiddleware, async (req, res) => {
     try {
         const { id } = req.params;
