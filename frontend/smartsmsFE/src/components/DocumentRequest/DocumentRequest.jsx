@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import MainTemplate from '../MainTemplate';
 import apiService from '../../services/service';
 import ApprovalModal from './ApprovalModal';
@@ -13,18 +13,30 @@ export default function DocumentRequest() {
     const [approvalModal, setApprovalModal] = useState({ isOpen: false, requestData: null });
     const [rejectionModal, setRejectionModal] = useState({ isOpen: false, requestData: null });
     const [searchTerm, setSearchTerm] = useState('');
+    
+    // State for notifications
+    const [newRequestAlert, setNewRequestAlert] = useState(false);
+    const previousCount = useRef(0);
 
-    useEffect(() => { fetchRequests(); }, []);
+    useEffect(() => { 
+        fetchRequests(); 
+        
+        // Set up real-time polling every 10 seconds
+        const interval = setInterval(() => {
+            fetchRequests(true); // pass true to indicate silent background fetch
+        }, 10000);
+
+        return () => clearInterval(interval);
+    }, []);
 
     useEffect(() => {
         let filtered = [...requests];
         
-        // 1. Filter out APPROVED and REJECTED (Only show pending)
+        // Filter out APPROVED and REJECTED
         filtered = filtered.filter(request => 
             request.status !== 'approved' && request.status !== 'rejected'
         );
 
-        // 2. Search filter
         if (searchTerm) {
             filtered = filtered.filter(request =>
                 request.fullName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -35,17 +47,32 @@ export default function DocumentRequest() {
         setFilteredRequests(filtered);
     }, [requests, searchTerm]);
 
-    const fetchRequests = async () => {
+    const fetchRequests = async (isBackground = false) => {
         try {
-            setLoading(true);
+            if (!isBackground) setLoading(true);
+            
             const response = await apiService.getAllDocumentRequests(); 
             const requestData = response?.requests || response || [];
+            
+            // Only show PENDING/PENDING_BARANGAY for the admin
+            const pendingRequests = Array.isArray(requestData) 
+                ? requestData.filter(r => r.status !== 'approved' && r.status !== 'rejected') 
+                : [];
+
+            // Check if a new request arrived
+            if (isBackground && pendingRequests.length > previousCount.current) {
+                setNewRequestAlert(true);
+                // Play a sound (optional)
+                // new Audio('/notification.mp3').play().catch(e => console.log('Audio blocked'));
+            }
+            
+            previousCount.current = pendingRequests.length;
             setRequests(Array.isArray(requestData) ? requestData : []);
             setError(null);
         } catch (err) {
-            setError('Error fetching document requests. Server might be waking up.');
+            if (!isBackground) setError('Error fetching document requests. Server might be waking up.');
         } finally {
-            setLoading(false);
+            if (!isBackground) setLoading(false);
         }
     };
 
@@ -78,6 +105,23 @@ export default function DocumentRequest() {
     return (
         <MainTemplate headerName={"Document Request"} cardHeader={"Document Request Management"}>
             <div className="main-container">
+                
+                {/* REAL-TIME NOTIFICATION BANNER */}
+                {newRequestAlert && (
+                    <div style={{ background: '#10b981', color: 'white', padding: '15px', borderRadius: '8px', marginBottom: '15px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', animation: 'fadeIn 0.5s' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                            <i className="fas fa-bell fa-shake" style={{ fontSize: '20px' }}></i>
+                            <strong>New Document Request Arrived!</strong>
+                        </div>
+                        <button 
+                            onClick={() => setNewRequestAlert(false)} 
+                            style={{ background: 'rgba(255,255,255,0.2)', border: 'none', color: 'white', padding: '5px 15px', borderRadius: '5px', cursor: 'pointer' }}
+                        >
+                            Dismiss
+                        </button>
+                    </div>
+                )}
+
                 <div className="filters-container" style={{ display: 'flex', gap: '15px', padding: '15px', background: '#f8fafc', marginBottom: '15px' }}>
                     <input 
                         type="text" 
@@ -86,6 +130,9 @@ export default function DocumentRequest() {
                         onChange={(e) => setSearchTerm(e.target.value)} 
                         style={{ padding: '10px', borderRadius: '5px', border: '1px solid #ccc', flex: 1 }}
                     />
+                    <button onClick={() => fetchRequests()} style={{ padding: '10px 20px', background: '#0038A8', color: 'white', border: 'none', borderRadius: '5px', cursor: 'pointer' }}>
+                        Refresh
+                    </button>
                 </div>
 
                 {loading ? (
