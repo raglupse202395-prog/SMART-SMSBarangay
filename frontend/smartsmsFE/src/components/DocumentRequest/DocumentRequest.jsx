@@ -13,23 +13,27 @@ export default function DocumentRequest() {
     const [approvalModal, setApprovalModal] = useState({ isOpen: false, requestData: null });
     const [rejectionModal, setRejectionModal] = useState({ isOpen: false, requestData: null });
     const [searchTerm, setSearchTerm] = useState('');
-    const [statusFilter, setStatusFilter] = useState('all'); 
 
     useEffect(() => { fetchRequests(); }, []);
 
     useEffect(() => {
         let filtered = [...requests];
+        
+        // 1. Filter out APPROVED and REJECTED (Only show pending)
+        filtered = filtered.filter(request => 
+            request.status !== 'approved' && request.status !== 'rejected'
+        );
+
+        // 2. Search filter
         if (searchTerm) {
             filtered = filtered.filter(request =>
                 request.fullName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
                 request.email?.toLowerCase().includes(searchTerm.toLowerCase())
             );
         }
-        if (statusFilter !== 'all') {
-            filtered = filtered.filter(request => request.status === statusFilter);
-        }
+        
         setFilteredRequests(filtered);
-    }, [requests, searchTerm, statusFilter]);
+    }, [requests, searchTerm]);
 
     const fetchRequests = async () => {
         try {
@@ -67,8 +71,6 @@ export default function DocumentRequest() {
         switch (status) {
             case 'pending': return <span style={{background: '#fef3c7', color: '#92400e', padding: '4px 8px', borderRadius: '4px', fontSize: '12px', fontWeight: 'bold'}}>PENDING PUROK</span>;
             case 'pending_barangay': return <span style={{background: '#e0e7ff', color: '#3730a3', padding: '4px 8px', borderRadius: '4px', fontSize: '12px', fontWeight: 'bold'}}>PUROK APPROVED (FOR BRGY)</span>;
-            case 'approved': return <span style={{background: '#d1fae5', color: '#065f46', padding: '4px 8px', borderRadius: '4px', fontSize: '12px', fontWeight: 'bold'}}>COMPLETED</span>;
-            case 'rejected': return <span style={{background: '#fee2e2', color: '#b91c1c', padding: '4px 8px', borderRadius: '4px', fontSize: '12px', fontWeight: 'bold'}}>REJECTED</span>;
             default: return status;
         }
     };
@@ -84,17 +86,6 @@ export default function DocumentRequest() {
                         onChange={(e) => setSearchTerm(e.target.value)} 
                         style={{ padding: '10px', borderRadius: '5px', border: '1px solid #ccc', flex: 1 }}
                     />
-                    <select 
-                        value={statusFilter} 
-                        onChange={(e) => setStatusFilter(e.target.value)}
-                        style={{ padding: '10px', borderRadius: '5px', border: '1px solid #ccc' }}
-                    >
-                        <option value="all">Show All Requests</option>
-                        <option value="pending">Pending Purok</option>
-                        <option value="pending_barangay">Purok Approved (For Final)</option>
-                        <option value="approved">Completed</option>
-                        <option value="rejected">Rejected</option>
-                    </select>
                 </div>
 
                 {loading ? (
@@ -117,7 +108,7 @@ export default function DocumentRequest() {
                             </thead>
                             <tbody>
                                 {filteredRequests.length === 0 ? (
-                                    <tr><td colSpan="4" style={{textAlign: 'center', padding: '20px'}}>No requests found for this filter.</td></tr>
+                                    <tr><td colSpan="4" style={{textAlign: 'center', padding: '20px'}}>No pending requests found.</td></tr>
                                 ) : (
                                     filteredRequests.map((request) => (
                                         <tr key={request._id}>
@@ -128,17 +119,14 @@ export default function DocumentRequest() {
                                             <td>{request.documentType}</td>
                                             <td>{getStatusBadge(request.status)}</td>
                                             <td>
-                                                {/* FIXED: Show buttons for any status that is NOT approved or rejected */}
-                                                {request.status !== 'approved' && request.status !== 'rejected' && (
-                                                    <div style={{ display: 'flex', gap: '8px' }}>
-                                                        <button onClick={() => setApprovalModal({ isOpen: true, requestData: request })} style={{ padding: '6px 12px', background: '#10b981', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>
-                                                            Final Approve & Send SMS
-                                                        </button>
-                                                        <button onClick={() => setRejectionModal({ isOpen: true, requestData: request })} style={{ padding: '6px 12px', background: '#ef4444', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>
-                                                            Reject
-                                                        </button>
-                                                    </div>
-                                                )}
+                                                <div style={{ display: 'flex', gap: '8px' }}>
+                                                    <button onClick={() => setApprovalModal({ isOpen: true, requestData: request })} style={{ padding: '6px 12px', background: '#10b981', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>
+                                                        Final Approve & Send SMS
+                                                    </button>
+                                                    <button onClick={() => setRejectionModal({ isOpen: true, requestData: request })} style={{ padding: '6px 12px', background: '#ef4444', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>
+                                                        Reject
+                                                    </button>
+                                                </div>
                                             </td>
                                         </tr>
                                     ))
